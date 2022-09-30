@@ -60,6 +60,30 @@ result = np.matmul(matrix_1, matrix_2)
 # --NOTE-- this is also used for property decorators (like in Seb's class)
 result = matrix_1 @ matrix_2
 
+# np.linalg.inv(matrix): matrix inverse
+inverse = np.linalg.inv(matrix_1)
+
+# np.ones(n): creates a nx1 matrix of 1's
+ones = np.ones(10)
+
+# shape(): returns the number of rows and columns as a tuple. Ex: (2, 4)
+df.shape()
+
+# sort_values(): sorts the values
+# optional argument 1: says what column to sort on
+# sort descending with ascending=False
+df.sort_values()
+df.sort_values(df.columns[0])
+df.sort_values(ascending=False)
+
+# pd.DataFrame(): creates a data frame
+x = 1
+y = 2
+z = 3
+pd.DataFrame(data = [x, y, z], 
+    index = ['X Value', 'Y Value', 'Z Value'], 
+    columns = ['Example Values'])
+
 ################# Mathematics #################
 # Square Root
 np.sqrt(12)
