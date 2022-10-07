@@ -1,6 +1,7 @@
 # Useful Libraries
 import pandas as pd
 import numpy as np
+import statsmodels.api as sm
 
 ################# Data ingestion #################
 # read_excel(path): reads in excel file at path
@@ -76,6 +77,21 @@ df.sort_values()
 df.sort_values(df.columns[0])
 df.sort_values(ascending=False)
 
+# skew(): calculates skewness of data set
+df.skew()
+
+# kurtosis(): calculates excess kurtosis (how fat are your tails?)
+df.kurtosis()
+
+# quantile(q): returns values at q-th quantile
+df.quantile(0.05)
+
+# cumprod(): returns cumulative product
+df.cumprod()
+
+# cummax(): returns cumulative maximum
+df.cummax()
+
 # pd.DataFrame(): creates a data frame
 x = 1
 y = 2
@@ -87,3 +103,62 @@ pd.DataFrame(data = [x, y, z],
 ################# Mathematics #################
 # Square Root
 np.sqrt(12)
+
+################# Useful Methods #################
+# This method takes return data and portfolio weights, and returns mean, volatitilty and Sharpe
+def portfolio_stats(excessReturnData, portfolio_weights):
+    # Calculate the mean by multiplying the mean excess returns by the tangency weights and annualizing
+    # TODO: double check where these formulas came from (class notes?)
+    mean = excessReturnData.mean() @ portfolio_weights * 12
+
+    # Volatility = sqrt(variance), and by class notes: variance = allocation_matrix * covariance_matrix * allocation_matrix
+    # Annualize the result with sqrt(12)
+    vol = np.sqrt(portfolio_weights @ excessReturnData.cov() @ portfolio_weights) * np.sqrt(12)
+
+    # Sharpe Ratio is mean / vol
+    sharpe_ratio = mean / vol
+
+    # Format for easy reading
+    return round(pd.DataFrame(data = [mean, vol, sharpe_ratio], 
+        index = ['Mean', 'Volatility', 'Sharpe'], 
+        columns = ['Portfolio Stats']), 4)
+    
+# This method takes returns data and returns mean, volatility and Sharpe
+def portfolio_stats_2(data):
+    # Calculate the mean and annualize
+    mean = data.mean() * 12
+
+    # Volatility = standard deviation
+    # Annualize the result with sqrt(12)
+    vol = data.std() * np.sqrt(12)
+
+    # Sharpe Ratio is mean / vol
+    sharpe_ratio = mean / vol
+
+    # Format for easy reading
+    return round(pd.DataFrame(data = [mean, vol, sharpe_ratio], 
+        index = ['Mean', 'Volatility', 'Sharpe']), 4)
+    
+# This method calculates regression statistics from OLS like beta, Treynor Ratio, and Information Ratio
+# Beta is the beta slope from Ordinary Least Squares, and shows how your portfolio moves for every dollar the market moves (lower = less risk in case of downturn)
+# Treynor Ratio is a measure of return based on systematic risk (like Sharpe but based on beta instead) (higher = better)
+#       Treynor = (portfolio risk - risk free rate)/beta
+# Information Ratio is the measure of returns beyond a benchmark compared to those returns' volatility (higher = better)
+#       Information Ratio = (portfolio return - benchmark return)/(tracking error), where tracking error = standard deviation of excess return
+def regression_stats(df):
+    reg_stats = pd.DataFrame(data = None, index = df.columns, columns = ['beta', 
+                                                                         'Treynor Ratio', 
+                                                                         'Information Ratio'])
+    for col in df.columns:
+        # Drop the NAs in y
+        y = df[col].dropna()
+        # Align the X with y - this is us including the intercept
+        X = sm.add_constant(factor_data['SPY US Equity'].loc[y.index])
+        reg = sm.OLS(y, X).fit()
+        reg_stats.loc[col, 'beta'] = reg.params[1]
+        # Treynor is calulated as mean/beta
+        reg_stats.loc[col, 'Treynor Ratio'] = (df[col].mean() * 12) / reg.params[1]
+        # Information Ratio = (portfolio return - benchmark return)/(tracking error), annualized by sqrt(12)
+        reg_stats.loc[col, 'Information Ratio'] = (reg.params[0] / reg.resid.std()) * np.sqrt(12)
+
+    return reg_stats.astype(float).round(4)
