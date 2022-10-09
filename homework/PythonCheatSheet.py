@@ -92,6 +92,23 @@ df.cumprod()
 # cummax(): returns cumulative maximum
 df.cummax()
 
+# add_constant(): adds a value of 1 to every item in the data passed - in a dataframe, this might add a column of ones
+sm.add_constant(df)
+
+# OLS(): used to replicate portfolios, or more specifically run OLS analysis
+# params: how you can get the values of the intercept and betas
+# rsquared: R-squared
+#       Example from HW 2:
+#           # Replicate HFRI with the merrill_factors data
+#           model = sm.OLS(HFRI, HFRI_with_constant).fit()
+#           # Report the intercept and betas
+#           model.params.to_frame('Regression Parameters')
+#           # Get R-squared
+#           round(model.rsquared, 4)
+sm.OLS(y, X).fit()
+
+
+
 # pd.DataFrame(): creates a data frame
 x = 1
 y = 2
