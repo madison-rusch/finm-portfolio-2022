@@ -1,4 +1,5 @@
 # Useful Libraries
+from re import L
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
@@ -29,6 +30,10 @@ df.nsmallest(1, 'Column_Name')
 
 # corr(): calculates the correlation matrix
 df.corr()
+
+# Example correlation between two assets
+regression_data.corr().loc['IWM US Equity', 'SPY US Equity']
+
 
 # unstack(): pivots columns and groups them as secondary rows by original row
 #    ex:       A   B   C
@@ -107,6 +112,13 @@ sm.add_constant(df)
 #           round(model.rsquared, 4)
 sm.OLS(y, X).fit()
 
+# Regression with two assets:
+#       y = regression_data['EEM US Equity']
+#       X = regression_data['SPY US Equity']
+
+#       hedge_reg = sm.OLS(y, X).fit()
+
+# In this example, Beta is hedge_reg.params[0]
 
 
 # pd.DataFrame(): creates a data frame
@@ -116,6 +128,23 @@ z = 3
 pd.DataFrame(data = [x, y, z], 
     index = ['X Value', 'Y Value', 'Z Value'], 
     columns = ['Example Values'])
+
+# To Calculate Expanding VaR, Basic VaR, and CVaR
+returns = pd.DataFrame()
+historic_var = returns.expanding(60).quantile(0.05)    
+VaR = returns.quantile(0.05)
+CVaR = (returns[returns < returns.quantile(0.05)]).mean()
+
+# To Plot
+historic_var.plot(kind='line')
+
+# Expanding Vol (eventually for VaR)
+sigma_expanding = returns.expanding(60).std()
+sigma_expanding.plot()
+
+# Rolling Vol (eventually for VaR)
+sigma_rolling = returns.rolling(60).std()
+sigma_rolling.plot()
 
 ################# Mathematics #################
 # Square Root
@@ -170,12 +199,131 @@ def regression_stats(df):
         # Drop the NAs in y
         y = df[col].dropna()
         # Align the X with y - this is us including the intercept
-        X = sm.add_constant(factor_data['SPY US Equity'].loc[y.index])
+        X = sm.add_constant(df['SPY US Equity'].loc[y.index])
         reg = sm.OLS(y, X).fit()
         reg_stats.loc[col, 'beta'] = reg.params[1]
         # Treynor is calulated as mean/beta
         reg_stats.loc[col, 'Treynor Ratio'] = (df[col].mean() * 12) / reg.params[1]
         # Information Ratio = (portfolio return - benchmark return)/(tracking error), annualized by sqrt(12)
+        # also calculated as alpha/standard deviation of residuals
         reg_stats.loc[col, 'Information Ratio'] = (reg.params[0] / reg.resid.std()) * np.sqrt(12)
 
     return reg_stats.astype(float).round(4)
+
+# This method works to calculate Maximum Drawdown
+def maximumDrawdown(returns):
+        cum_returns = (1 + returns).cumprod()
+        rolling_max = cum_returns.cummax()
+        drawdown = (cum_returns - rolling_max) / rolling_max
+
+        max_drawdown = drawdown.min()
+        end_date = drawdown.idxmin()
+        summary = pd.DataFrame({'Max Drawdown': max_drawdown, 'Bottom': end_date})
+
+        for col in drawdown:
+            summary.loc[col,'Peak'] = (rolling_max.loc[:end_date[col],col]).idxmax()
+            recovery = (drawdown.loc[end_date[col]:,col])
+            try:
+                summary.loc[col,'Recover'] = pd.to_datetime(recovery[recovery >= 0].index[0])
+            except:
+                summary.loc[col,'Recover'] = pd.to_datetime(None)
+
+            summary['Peak'] = pd.to_datetime(summary['Peak'])
+            try:
+                summary['Duration (to Recover)'] = (summary['Recover'] - summary['Peak'])
+            except:
+                summary['Duration (to Recover)'] = None
+
+            summary = summary[['Max Drawdown','Peak','Bottom','Recover','Duration (to Recover)']]
+
+        return summary  
+
+# This method calculates VaR and CVaR for a given portfolio
+def tailMetrics(returns, quantile=.05, relative=False, mdd=True):    
+    metrics = pd.DataFrame(index=returns.columns)
+    metrics['Skewness'] = returns.skew()
+    metrics['Kurtosis'] = returns.kurtosis()
+
+    VaR = returns.quantile(quantile)
+    CVaR = (returns[returns < returns.quantile(quantile)]).mean()
+
+    if relative:
+        VaR = (VaR - returns.mean())/returns.std()
+        CVaR = (CVaR - returns.mean())/returns.std()
+
+    metrics[f'VaR ({quantile})'] = VaR
+    metrics[f'CVaR ({quantile})'] = CVaR
+
+    if mdd:
+        mdd_stats = maximumDrawdown(returns)
+        metrics = metrics.join(mdd_stats)
+
+        if relative:
+            metrics['Max Drawdown'] = (metrics['Max Drawdown'] - returns.mean())/returns.std()
+
+    return metrics
+
+# calculates probability of underperformance compared to the benchmark (risk-free rate in Barnes example)
+# c from the equations is what we're comparing against, so for risk free rate c = 0, and for if we can exceed 6%, use c = 0.06
+
+import scipy.stats as stats
+def prob_calc(h, tilde_mu, tilde_sigma):
+    return stats.norm.cdf((- np.sqrt(h) * tilde_mu) / tilde_sigma)
+
+
+################# Midterm Notes #################
+'''
+MV Optimization (Tangency Portfolios)
+
+- True or False? Mean-variance optimization goes long the highest Sharpe-Ratio assets and shorts the lowest Sharpe-ratio assets.
+        False. MV Optimization seeks to maximize Sharpe of the portfolio, but that is not achieved by weighting individual assets
+        proportional to their individual Sharpe ratios. Rather, an asset's covariances are an important determinant in whether it 
+        has a high/low, positive/negative weight.
+        
+- True or False? The Tangency portfolio weights assets in proportion to their Sharpe ratios.
+        False. Weights account for covariances, not just volatilities. Weights are determined based on the solution of optimization
+        problem where we try to minimize the covariance matrix.
+        
+- True or False? Suppose we have k risky securities, and an equally weighted portfolio is formed from them. If pairwise correlations 
+across k security returns are less than perfect, an equally weighted portfolio becomes riskless as k approaches infinity.
+
+        False. Portfolio would become riskless only if pairwise correlations across k security returns were zero. In our case, it's
+        not zero, that's why portfolio isn't riskless as k approaches infinity. i.e. riskless = no correlation between assets
+        
+- If you need to zero out everything but the variances (like in Midterm 2020), do this:
+for i in Sigma:
+    for j in Sigma:
+        if i != j:
+            Sigma[i][j] = 0
+
+'''
+'''
+Regression/Replication
+
+ - Short Answer. Suppose we have a security, r. Explain how to construct its information ratio with respect to a benchmark of z.
+    1. First run regression with an intercept
+    2. Calculate the standard deviation of the residualsj.
+    3. Use the formula IR = alpha/epsilon 
+    - See def regression_stats(df)
+
+- In hedging, short the beta of the regression. If replicating, long the beta of the replication/regression
+
+- If you want to find the mean of a hedged portfolio, use mu_hedged = mu_EEM - beta * mu_SPY
+'''
+
+'''
+Modeling Volatility and VaR
+ - Historic VaR: expanding based on the first amount of time and only adding on more from there
+ 
+The probability that the cumulative Market Returns < cumulative Risk Free Returns, use normal cdf, c=0, (c-mu)/sigma
+
+ - Drawbacks of Historical VaR
+    - Backward looking: only looks at historical data
+    - Ghosting Effect: Equal weights on observations that are very far away time-wise
+    - Slow to React: Because of ghosting, it puts less weight on more recent observations
+    
+Probability of Underperformance can be calculated with CDF, using log returns:
+    cdf((-sqrt(h)*mu)/sigma)
+    mu = returns
+    sigma = vol
+'''
