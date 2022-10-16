@@ -3,6 +3,7 @@ from re import L
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
+import scipy
 
 ################# Data ingestion #################
 # read_excel(path): reads in excel file at path
@@ -145,6 +146,22 @@ sigma_expanding.plot()
 # Rolling Vol (eventually for VaR)
 sigma_rolling = returns.rolling(60).std()
 sigma_rolling.plot()
+
+# Log Returns: use the method to get the log returns of an asset. NOTE: the 1 + is to account for cumulative returns
+np.log(1+df['SPY US Equity'])
+
+# Calculating VaR (assuming Normal)
+volatility = -.0009
+q = 0.01
+mu = 0
+z_phi = scipy.stats.norm.ppf(q)
+VaR_estimate = mu + z_phi*volatility
+
+# Calculating CVaR (assuming Normal)
+q = 0.05
+z = scipy.stats.norm.ppf(q)
+coef_CVaR = -stats.norm().cdf(z)/q
+CVaR_estimate = mu + coef_CVaR*volatility
 
 ################# Mathematics #################
 # Square Root
@@ -314,6 +331,9 @@ Regression/Replication
 '''
 Modeling Volatility and VaR
  - Historic VaR: expanding based on the first amount of time and only adding on more from there
+ 
+Log Returns:
+ - To get log returns of an asset, use np.log(1+modeling_risk_data['SPY US Equity'])
  
 The probability that the cumulative Market Returns < cumulative Risk Free Returns, use normal cdf, c=0, (c-mu)/sigma
 
