@@ -99,6 +99,7 @@ df.cumprod()
 df.cummax()
 
 # add_constant(): adds a value of 1 to every item in the data passed - in a dataframe, this might add a column of ones
+#   generally used in replication to calculate OLS with an intercept
 sm.add_constant(df)
 
 # OLS(): used to replicate portfolios, or more specifically run OLS analysis
@@ -163,6 +164,9 @@ z = scipy.stats.norm.ppf(q)
 coef_CVaR = -stats.norm().cdf(z)/q
 CVaR_estimate = mu + coef_CVaR*volatility
 
+# Example of subtracting a risk free rate from a dataframe
+df_ex = df.subtract(df['USGG3M Index'],axis=0).drop(columns=['USGG3M Index'])
+
 ################# Mathematics #################
 # Square Root
 np.sqrt(12)
@@ -206,7 +210,7 @@ def portfolio_stats_2(data):
 # Beta is the beta slope from Ordinary Least Squares, and shows how your portfolio moves for every dollar the market moves (lower = less risk in case of downturn)
 # Treynor Ratio is a measure of return based on systematic risk (like Sharpe but based on beta instead) (higher = better)
 #       Treynor = (portfolio risk - risk free rate)/beta
-# Information Ratio is the measure of returns beyond a benchmark compared to those returns' volatility (higher = better)
+# Information Ratio is the measure of returns beyond a benchmark compared to those returns' volatility (higher = better). Also known as Sharpe Ratio of Hedged position
 #       Information Ratio = (portfolio return - benchmark return)/(tracking error), where tracking error = standard deviation of excess return
 def regression_stats(df):
     reg_stats = pd.DataFrame(data = None, index = df.columns, columns = ['beta', 
@@ -255,7 +259,7 @@ def maximumDrawdown(returns):
 
         return summary  
 
-# This method calculates VaR and CVaR for a given portfolio
+# This method calculates VaR and CVaR for a given portfolio (also skewness and kurtosis)
 def tailMetrics(returns, quantile=.05, relative=False, mdd=True):    
     metrics = pd.DataFrame(index=returns.columns)
     metrics['Skewness'] = returns.skew()
@@ -287,6 +291,74 @@ import scipy.stats as stats
 def prob_calc(h, tilde_mu, tilde_sigma):
     return stats.norm.cdf((- np.sqrt(h) * tilde_mu) / tilde_sigma)
 
+# This method is used to generate a correlation heatmap and optionally provide the MIN and MAX correlation pair
+# See Mark's ProShares discussion for example usage (https://github.com/MarkHendricks/finm-portfolio-2022/blob/main/discussions/Case%202%20-%20ProShares%20ETF.ipynb)
+def display_correlation(df,annot=True,list_maxmin=True):
+    
+    corrmat = df.corr()
+    #ignore self-correlation
+    corrmat[corrmat==1] = None
+    sns.heatmap(corrmat,annot=annot)
+
+    if list_maxmin:
+        corr_rank = corrmat.unstack().sort_values().dropna()
+        pair_max = corr_rank.index[-1]
+        pair_min = corr_rank.index[0]
+
+        print(f'MIN Correlation pair is {pair_min}')
+        print(f'MAX Correlation pair is {pair_max}')
+        
+    return
+
+# Example of Replication with and without an intercept
+rep_spy = df[['SPY US Equity']].copy()
+
+model = sm.OLS(df['SPY US Equity'],sm.add_constant(df.drop(columns=['SPY US Equity'])))
+rep_spy['Static-IS-Int'] = model.fit().fittedvalues
+model = sm.OLS(df['SPY US Equity'],df.drop(columns=['SPY US Equity']))
+rep_spy['Static-IS-NoInt'] = model.fit().fittedvalues
+portfolio_stats_2(rep_spy)
+
+# Compute the weights of the tangency portfolio
+def compute_tangency(excessReturnMatrix):
+    # Get the covariance matrix based on excess returns
+    sigma = excessReturnMatrix.cov()
+    
+    # Get the number of asset classes (in this example should be 11)
+    n = sigma.shape[0]
+    
+    # Get the vector of mean excess returns
+    mu = excessReturnMatrix.mean()
+    
+    # Get sigma inverse
+    sigma_inv = np.linalg.inv(sigma)
+    
+    # Now we have all the pieces, do the calculation
+    weights = (sigma_inv @ mu) / (np.ones(n) @ sigma_inv @ mu)
+    
+    # Convert back to a Series for convenience
+    return pd.Series(weights, index=mu.index)
+
+# Compute the optimal portfolio given a target mean return
+def target_mv_portfolio(df_tilde, target_return=0.01, diagonalize_Sigma=False):
+
+    omega_tangency, mu_tilde, Sigma = compute_tangency(df_tilde, diagonalize_Sigma=diagonalize_Sigma)
+
+    Sigma_adj = Sigma.copy()
+
+    if diagonalize_Sigma:
+
+        Sigma_adj.loc[:,:] = np.diag(np.diag(Sigma_adj))
+
+    Sigma_inv = np.linalg.inv(Sigma_adj)
+
+    N = Sigma_adj.shape[0]
+
+    delta_tilde = ((np.ones(N) @ Sigma_inv @ mu_tilde)/(mu_tilde @ Sigma_inv @ mu_tilde)) * target_return
+
+    omega_star = delta_tilde * omega_tangency
+
+    return omega_star, mu_tilde, Sigma_adj
 
 ################# Midterm Notes #################
 '''
@@ -312,20 +384,37 @@ for i in Sigma:
     for j in Sigma:
         if i != j:
             Sigma[i][j] = 0
+            
+ - MV Optimization fails out-of-sample for two reasons:
+    1. Imprecise estimation of covariance matrix: The covariance matrix is poorly estimated in the case of large number of assets or less amount 
+        of historical data. Inverting the covariance matrix makes the estimation even more fragile. Inverting a matrix with high correlations increases 
+        the condition number further adding to the instability. Due to these, our estimates of covariances will likely not hold out-of-sample.
+    2. High senstivity to changes in mean return: MV optimizer is highly sensitive to small changes in the estimated mean returns of the security pool.
+        Large swings in portfolio weights are required to maintain the optimal portfolio even with small changes in mean returns. Due to this, MV 
+        optimizer does not perform well on out-of-sample data   
 
 '''
+
 '''
 Regression/Replication
 
  - Short Answer. Suppose we have a security, r. Explain how to construct its information ratio with respect to a benchmark of z.
     1. First run regression with an intercept
-    2. Calculate the standard deviation of the residualsj.
+    2. Calculate the standard deviation of the residuals.
     3. Use the formula IR = alpha/epsilon 
     - See def regression_stats(df)
 
-- In hedging, short the beta of the regression. If replicating, long the beta of the replication/regression
+ - In hedging, short the beta of the regression. If replicating, long the beta of the replication/regression
 
-- If you want to find the mean of a hedged portfolio, use mu_hedged = mu_EEM - beta * mu_SPY
+ - If you want to find the mean of a hedged portfolio, use mu_hedged = mu_EEM - beta * mu_SPY (2021 Exam, Q3.3)
+
+ - Treynor Ratio: Sharpe ratio of betas (mean excess return/beta). It is a representation of how much return was generated for each unit of risk taken
+                  on by the portfolio. Risk here generally refers to systematic risk. For the same level of exposure to the system (beta) Treynor will
+                  be higher when returns are higher. Lets us normalize returns based on exposure to the market
+ - Information Ratio: Sharpe Ratio of hedged position (alpha/sigma epsilon). This is the tradeoff between alpha and the unexplained volatility.
+                      In the ProShares example, the indexes had positive returns, but when replicated (hedged) with SPY, we see the info ratios
+                      go negative. They drastically underperformed SPY. Is your alpha actually due to smart decisions, or is it due to volatility in the 
+                      market? Higher IR = more attribution that your returns are due to smart decisions
 '''
 
 '''
