@@ -38,19 +38,23 @@ Hedging and Replication
 '''
 Modeling Risk
 
- - Rolling Volatility
+ - Rolling Volatility (and VaR)
     - 2021 Midterm Q4.2
-    - HW 3
+    - HW 3 Section 1.2
     
- - Expanding Volatility
-    - HW 3
+ - Expanding Volatility (and VaR)
+    - HW 3 Section 1.2
 
  - Historic Variance
-    - HW 3
+    - HW 3 Section 1.1
+
+ - VaR/CVaR
+    - HW 3 Section 1.3
 
  - Probability of Performance/Underperformance
     - 2021 Midterm Q4.1
-    - HW 3
+    - HW 3 Section 3
+    - TA Review Session 3
     
 
 '''

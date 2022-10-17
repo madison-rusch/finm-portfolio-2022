@@ -286,7 +286,6 @@ def tailMetrics(returns, quantile=.05, relative=False, mdd=True):
 
 # calculates probability of underperformance compared to the benchmark (risk-free rate in Barnes example)
 # c from the equations is what we're comparing against, so for risk free rate c = 0, and for if we can exceed 6%, use c = 0.06
-
 import scipy.stats as stats
 def prob_calc(h, tilde_mu, tilde_sigma):
     return stats.norm.cdf((- np.sqrt(h) * tilde_mu) / tilde_sigma)
@@ -408,6 +407,7 @@ Regression/Replication
 
  - If you want to find the mean of a hedged portfolio, use mu_hedged = mu_EEM - beta * mu_SPY (2021 Exam, Q3.3)
 
+ - Sharpe Ratio: mean/vol. How much return are you getting for your level of risk? Always use excess returns unless stated otherwise
  - Treynor Ratio: Sharpe ratio of betas (mean excess return/beta). It is a representation of how much return was generated for each unit of risk taken
                   on by the portfolio. Risk here generally refers to systematic risk. For the same level of exposure to the system (beta) Treynor will
                   be higher when returns are higher. Lets us normalize returns based on exposure to the market
@@ -419,7 +419,11 @@ Regression/Replication
 
 '''
 Modeling Volatility and VaR
- - Historic VaR: expanding based on the first amount of time and only adding on more from there
+ - Historic VaR: expanding based on the first amount of time and only adding on more from there.
+    - Drawbacks:
+        ~ Backward Looking: looks only at historical data
+        ~ Ghosting Effect: equal weight given to far away observations i.e. 1920 weighted same as 2020
+        ~ Slow to React: due to Ghosting, less weight is given to most recent observations
  
 Log Returns:
  - To get log returns of an asset, use np.log(1+modeling_risk_data['SPY US Equity'])
