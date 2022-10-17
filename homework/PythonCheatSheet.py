@@ -167,12 +167,19 @@ CVaR_estimate = mu + coef_CVaR*volatility
 # Example of subtracting a risk free rate from a dataframe
 df_ex = df.subtract(df['USGG3M Index'],axis=0).drop(columns=['USGG3M Index'])
 
+# corrcoeff: can be used to find the correlation coefficient of two datasets (see HW 2 out-of-sample replication)
+np.corrcoef(df1, df2)
+
+# model.params will give you all Beta values of the regression after running OLS
+model.params
+
 ################# Mathematics #################
 # Square Root
 np.sqrt(12)
 
 ################# Useful Methods #################
 # This method takes return data and portfolio weights, and returns mean, volatitilty and Sharpe
+# Good for tangency portfolios, optimal portfolios, and out of sample optimal portfolios (HW 1)
 def portfolio_stats(excessReturnData, portfolio_weights):
     # Calculate the mean by multiplying the mean excess returns by the tangency weights and annualizing
     # TODO: double check where these formulas came from (class notes?)
@@ -363,26 +370,25 @@ def target_mv_portfolio(df_tilde, target_return=0.01, diagonalize_Sigma=False):
 '''
 MV Optimization (Tangency Portfolios)
 
-- True or False? Mean-variance optimization goes long the highest Sharpe-Ratio assets and shorts the lowest Sharpe-ratio assets.
+ - True or False? Mean-variance optimization goes long the highest Sharpe-Ratio assets and shorts the lowest Sharpe-ratio assets.
         False. MV Optimization seeks to maximize Sharpe of the portfolio, but that is not achieved by weighting individual assets
         proportional to their individual Sharpe ratios. Rather, an asset's covariances are an important determinant in whether it 
         has a high/low, positive/negative weight.
         
-- True or False? The Tangency portfolio weights assets in proportion to their Sharpe ratios.
+ - True or False? The Tangency portfolio weights assets in proportion to their Sharpe ratios.
         False. Weights account for covariances, not just volatilities. Weights are determined based on the solution of optimization
         problem where we try to minimize the covariance matrix.
         
-- True or False? Suppose we have k risky securities, and an equally weighted portfolio is formed from them. If pairwise correlations 
-across k security returns are less than perfect, an equally weighted portfolio becomes riskless as k approaches infinity.
-
+ - True or False? Suppose we have k risky securities, and an equally weighted portfolio is formed from them. If pairwise correlations 
+   across k security returns are less than perfect, an equally weighted portfolio becomes riskless as k approaches infinity.
         False. Portfolio would become riskless only if pairwise correlations across k security returns were zero. In our case, it's
         not zero, that's why portfolio isn't riskless as k approaches infinity. i.e. riskless = no correlation between assets
         
 - If you need to zero out everything but the variances (like in Midterm 2020), do this:
-for i in Sigma:
-    for j in Sigma:
-        if i != j:
-            Sigma[i][j] = 0
+ for i in Sigma:
+     for j in Sigma:
+         if i != j:
+             Sigma[i][j] = 0
             
  - MV Optimization fails out-of-sample for two reasons:
     1. Imprecise estimation of covariance matrix: The covariance matrix is poorly estimated in the case of large number of assets or less amount 
@@ -415,6 +421,11 @@ Regression/Replication
                       In the ProShares example, the indexes had positive returns, but when replicated (hedged) with SPY, we see the info ratios
                       go negative. They drastically underperformed SPY. Is your alpha actually due to smart decisions, or is it due to volatility in the 
                       market? Higher IR = more attribution that your returns are due to smart decisions
+                      
+ - Skewness is important for Hedge Funds, because if they're hedging properly we expect them to be less skewed than the market
+ 
+ - When replicating, matching returns is more important, so don't include an intercept (This is what Merrill Lynch did)
+ - When hedging, matching variance is more important, so include an intercept. This makes the betas capture the variability/variance better
 '''
 
 '''
